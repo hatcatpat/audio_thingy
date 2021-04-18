@@ -2,6 +2,7 @@
 #include <math.h>
 #include <pthread.h>
 #include <stdio.h>
+#include <string.h>
 #include <sys/socket.h>
 #include <time.h>
 
@@ -29,9 +30,20 @@
 //================================================
 int use_client_A = 0;
 
+char *current_sketch = "default.c";
+
 int build() {
-  printf("[BUILD] building %c...\n", use_client_A ? 'a' : 'b');
-  int result = system("cd client && gcc -c client.c -fPIC");
+  printf("[BUILD] building %s into client_%c...\n", current_sketch,
+         use_client_A ? 'a' : 'b');
+  int result = -1;
+  {
+    char *pre = "cd client && gcc -c sketches/";
+    char *post = " -o client.o -fPIC";
+    char s[sizeof(pre) + sizeof(current_sketch) + sizeof(post)];
+    sprintf(s, "%s%s%s", pre, current_sketch, post);
+    result = system(s);
+  }
+
   if (result == 0) {
     char client_so_file_name[50];
     sprintf(client_so_file_name,
@@ -164,11 +176,11 @@ void load_client() {
 
         client_run_lock = 1;
 
-        // sets our n_ values to match the client
+        // set our n_ values to match the client
         set_sizes(&nb, &no, &nf);
-        // allocates correct memory for our new S
+        // allocate correct memory for our new S
         resize_S(&s, nb, no, nf);
-        // calls client reload function
+        // call client reload function
         reload(&s);
 
         client_run = run;
@@ -196,6 +208,59 @@ void load_client() {
 //================================================
 // SERVER / INPUT
 //================================================
+
+void parse_user_input(char *input, int *running) {
+  enum { SKETCH } command;
+  const char *delim = " ";
+  int mode = 0;
+
+  char *nl = strchr(input, '\n');
+  if (nl != NULL)
+    *nl = '\0';
+
+  char *ptr = strtok(input, delim);
+  if (!ptr)
+    return;
+
+  while (1) {
+    printf("[USER] raw: %s\n", ptr);
+    if (mode == 0) {
+      if (strcmp(ptr, "quit") == 0) {
+        printf("[USER] quitting!\n");
+        *running = 0;
+        break;
+      } else if (strcmp(ptr, "sketch") == 0) {
+        command = SKETCH;
+      } else if (strcmp(ptr, "reload") == 0) {
+        build();
+        load_client();
+        break;
+      } else if (strcmp(ptr, "build") == 0) {
+        build();
+        break;
+      } else {
+        printf("[USER] incorrect command entered! try 'reload', 'build', or "
+               "'sketch FILENAME'\n");
+        break;
+      }
+      mode = 1;
+      ptr = strtok(NULL, delim);
+    } else {
+      if (ptr) {
+        if (command == SKETCH) {
+          char *filename;
+          if (sscanf(ptr, "%ms", &filename) == 1) {
+            printf("[USER] sketch args successful, file: %s\n", filename);
+            current_sketch = filename;
+          } else {
+            printf("[USER] sketch args failed, input: %s\n", ptr);
+          }
+        }
+      }
+      break;
+    }
+  }
+}
 
 #define SERVER_PORT 2000
 
@@ -239,7 +304,8 @@ void *run_server() {
 
   printf("[SERVER] server running on 127.0.0.1:%i...\n", SERVER_PORT);
 
-  while (1) {
+  int running = 1;
+  while (running) {
     // receive messages
     if (recvfrom(socket_desc, client_message, sizeof(client_message), 0,
                  (struct sockaddr *)&client_addr, &client_struct_length) < 0) {
@@ -252,33 +318,22 @@ void *run_server() {
 
     printf("[SERVER] client: %s\n", client_message);
 
-    if (strstr(client_message, "reload")) {
-      build();
-      load_client();
-    } else if (strstr(client_message, "quit")) {
-      break;
-    }
+    parse_user_input(client_message, &running);
+    memset(client_message, '\0', sizeof(client_message));
   }
 
   close(socket_desc);
   return NULL;
 }
 
+// gets input from command line
 void *run_cmd_input() {
   printf("\nplaying ... type 'quit' to quit\n");
-  char line[100];
-  while (1) {
-    printf("\n>> ");
-    fgets(line, sizeof(line), stdin);
-    if (strstr(line, "reload")) {
-      build();
-      // for (int i = 0; i < 100; i++)
-      load_client();
-    } else if (strstr(line, "quit")) {
-      printf("quit!\n");
-      break;
-    } else if (strstr(line, "build")) {
-      build();
+  char input[100];
+  int running = 1;
+  while (running) {
+    if (fgets(input, sizeof(input), stdin)) {
+      parse_user_input(input, &running);
     }
   }
   return NULL;
@@ -312,10 +367,6 @@ int main(int argc, char **argv) {
   deviceConfig.sampleRate = DEVICE_SAMPLE_RATE;
   deviceConfig.dataCallback = data_callback;
 
-  use_client_A = 0;
-  if (build())
-    return -1;
-  use_client_A = 1;
   if (build())
     return -1;
 
@@ -343,8 +394,9 @@ int main(int argc, char **argv) {
   pthread_create(&cmd_thread_id, NULL, run_cmd_input, NULL);
 
   pthread_join(cmd_thread_id, NULL);
+  // pthread_join(server_thread_id, NULL);
 
-  printf("\n\naudio_thingy shutting down...");
+  printf("\naudio_thingy shutting down...");
   ma_device_uninit(&device);
 
   (void)argc;
