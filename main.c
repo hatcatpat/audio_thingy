@@ -212,8 +212,8 @@ void load_client() {
 void parse_user_input(char *input, int *running) {
   enum { SKETCH } command;
   const char *delim = " ";
-  int mode = 0;
 
+  // remove newline from input
   char *nl = strchr(input, '\n');
   if (nl != NULL)
     *nl = '\0';
@@ -222,42 +222,37 @@ void parse_user_input(char *input, int *running) {
   if (!ptr)
     return;
 
-  while (1) {
-    printf("[USER] raw: %s\n", ptr);
-    if (mode == 0) {
-      if (strcmp(ptr, "quit") == 0) {
-        printf("[USER] quitting!\n");
-        *running = 0;
-        break;
-      } else if (strcmp(ptr, "sketch") == 0) {
-        command = SKETCH;
-      } else if (strcmp(ptr, "reload") == 0) {
-        build();
-        load_client();
-        break;
-      } else if (strcmp(ptr, "build") == 0) {
-        build();
-        break;
+  // parse command
+  if (strcmp(ptr, "quit") == 0) {
+    printf("[USER] quitting!\n");
+    *running = 0;
+    return;
+  } else if (strcmp(ptr, "sketch") == 0) {
+    command = SKETCH;
+  } else if (strcmp(ptr, "reload") == 0) {
+    build();
+    load_client();
+    return;
+  } else if (strcmp(ptr, "build") == 0) {
+    build();
+    return;
+  } else {
+    printf("[USER] incorrect command entered! try 'reload', 'build', or "
+           "'sketch FILENAME'\n");
+    return;
+  }
+
+  // parse arguments
+  ptr = strtok(NULL, delim);
+  if (ptr) {
+    if (command == SKETCH) {
+      char *filename;
+      if (sscanf(ptr, "%ms", &filename) == 1) {
+        printf("[USER] sketch set to: %s\n", filename);
+        current_sketch = filename;
       } else {
-        printf("[USER] incorrect command entered! try 'reload', 'build', or "
-               "'sketch FILENAME'\n");
-        break;
+        printf("[USER] sketch args failed, input: %s\n", ptr);
       }
-      mode = 1;
-      ptr = strtok(NULL, delim);
-    } else {
-      if (ptr) {
-        if (command == SKETCH) {
-          char *filename;
-          if (sscanf(ptr, "%ms", &filename) == 1) {
-            printf("[USER] sketch args successful, file: %s\n", filename);
-            current_sketch = filename;
-          } else {
-            printf("[USER] sketch args failed, input: %s\n", ptr);
-          }
-        }
-      }
-      break;
     }
   }
 }
@@ -332,6 +327,7 @@ void *run_cmd_input() {
   char input[100];
   int running = 1;
   while (running) {
+    printf("\n>> ");
     if (fgets(input, sizeof(input), stdin)) {
       parse_user_input(input, &running);
     }
