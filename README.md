@@ -1,5 +1,6 @@
 # audio_thingy
  livecoding audio in c
+ 
  currently only on linux, although you only need to change the dynamic library reloading and use gcc equivalents to use it on other operating systems
 
 ## interaction
