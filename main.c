@@ -194,7 +194,7 @@ void load_client() {
 }
 
 //================================================
-// SERVER
+// SERVER / INPUT
 //================================================
 
 #define SERVER_PORT 2000
@@ -219,7 +219,7 @@ void *run_server() {
     printf("[SERVER] socket failed to create\n");
     return NULL;
   }
-  printf("\n\n[SERVER] socket created...\n");
+  printf("\n[SERVER] socket created...\n");
 
   // we are using internet
   server_addr.sin_family = AF_INET;
@@ -255,10 +255,32 @@ void *run_server() {
     if (strstr(client_message, "reload")) {
       build();
       load_client();
+    } else if (strstr(client_message, "quit")) {
+      break;
     }
   }
 
   close(socket_desc);
+  return NULL;
+}
+
+void *run_cmd_input() {
+  printf("\nplaying ... type 'quit' to quit\n");
+  char line[100];
+  while (1) {
+    printf("\n>> ");
+    fgets(line, sizeof(line), stdin);
+    if (strstr(line, "reload")) {
+      build();
+      // for (int i = 0; i < 100; i++)
+      load_client();
+    } else if (strstr(line, "quit")) {
+      printf("quit!\n");
+      break;
+    } else if (strstr(line, "build")) {
+      build();
+    }
+  }
   return NULL;
 }
 
@@ -281,7 +303,6 @@ void data_callback(ma_device *device, void *output, const void *input,
 
 //================================================
 int main(int argc, char **argv) {
-  // MA
   ma_device_config deviceConfig;
   ma_device device;
 
@@ -315,27 +336,15 @@ int main(int argc, char **argv) {
     return -5;
   }
 
-  printf("\nplaying ... type 'quit' to quit\n");
-
   pthread_t server_thread_id;
   pthread_create(&server_thread_id, NULL, run_server, NULL);
 
-  char line[100];
-  while (1) {
-    printf("\n>> ");
-    fgets(line, sizeof(line), stdin);
-    if (strstr(line, "reload")) {
-      build();
-      // for (int i = 0; i < 100; i++)
-      load_client();
-    } else if (strstr(line, "quit")) {
-      printf("quit!\n");
-      break;
-    } else if (strstr(line, "build")) {
-      build();
-    }
-  }
+  pthread_t cmd_thread_id;
+  pthread_create(&cmd_thread_id, NULL, run_cmd_input, NULL);
 
+  pthread_join(cmd_thread_id, NULL);
+
+  printf("\n\naudio_thingy shutting down...");
   ma_device_uninit(&device);
 
   (void)argc;

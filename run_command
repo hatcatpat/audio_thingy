@@ -10,6 +10,7 @@ Help()
   echo "-h	show help"
   echo "-p	set port"
   echo "-r	reloads client"
+  echo "-q	quits server"
   echo "-s	set IP address"
   echo
 }
@@ -18,11 +19,13 @@ SERVER="127.0.0.1"
 PORT=2000
 MESSAGE=""
 
-while getopts "hrp:s:" option; do
+while getopts "hrqp:s:" option; do
   case $option in
     s) SERVER="$OPTARG"
       ;;
     r) MESSAGE="reload"
+      ;;
+    q) MESSAGE="quit"
       ;;
     p) PORT="$OPTARG"
       ;;
