@@ -1,7 +1,13 @@
 # audio_thingy
  livecoding audio in c
  
+ 
  currently only on linux, although you only need to change the dynamic library reloading and use gcc equivalents to use it on other operating systems
+
+## mentions
+ - the idea to livecode audio in c came from [clive](https://mathr.co.uk/clive/), whose music is also excellent
+ - another source of inspiration is the audio-visual c coder [deadbeef](https://www.instagram.com/_deafbeef/)
+ - uses [miniaudio](https://github.com/mackron/miniaudio) for the audio device setup
 
 ## interaction
  you can talk to a running audio_thingy program either via the command line or UDP, the commands are the same.
