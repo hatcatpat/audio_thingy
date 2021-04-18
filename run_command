@@ -1,0 +1,40 @@
+#!/bin/bash
+
+# this script uses netcat to send commands over UDP to a running audio_thingy server
+
+Help()
+{
+  echo "a script for controlling an audio_thingy server via UDP"
+  echo "note: requires netcat"
+  echo
+  echo "-h	show help"
+  echo "-p	set port"
+  echo "-r	reloads client"
+  echo "-s	set IP address"
+  echo
+}
+
+SERVER="127.0.0.1"
+PORT=2000
+MESSAGE=""
+
+while getopts "hrp:s:" option; do
+  case $option in
+    s) SERVER="$OPTARG"
+      ;;
+    r) MESSAGE="reload"
+      ;;
+    p) PORT="$OPTARG"
+      ;;
+    h) Help
+      exit;;
+  esac
+done
+
+if [[ $MESSAGE == "" ]]; then
+  echo "[ERROR] needs at least one message flag"
+  exit
+fi
+
+echo "sending \"$MESSAGE\" to $SERVER:$PORT"
+echo $MESSAGE | nc --udp --close $SERVER $PORT

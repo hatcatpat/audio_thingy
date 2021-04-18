@@ -1,5 +1,8 @@
+#include <arpa/inet.h>
 #include <math.h>
+#include <pthread.h>
 #include <stdio.h>
+#include <sys/socket.h>
 #include <time.h>
 
 #define MA_NO_DECODING
@@ -27,7 +30,7 @@
 int use_client_A = 0;
 
 int build() {
-  printf("building %c...\n", use_client_A ? 'a' : 'b');
+  printf("[BUILD] building %c...\n", use_client_A ? 'a' : 'b');
   int result = system("cd client && gcc -c client.c -fPIC");
   if (result == 0) {
     char client_so_file_name[50];
@@ -94,8 +97,8 @@ static inline uint np2(uint x) {
 // allocates memory for the arrays in S
 static void resize_S(S *s, int nb, int no, int nf) {
 
-  RESIZE_IMPL(nb, b, buf, init_buf(i));
-  RESIZE_IMPL(no, o, osc, init_osc(i, 0.0));
+  RESIZE_IMPL(nb, b, buf, init_buf(&s->b[i]));
+  RESIZE_IMPL(no, o, osc, init_osc(&s->o[i], 0.0));
   RESIZE_IMPL(nf, f, float, s->f[i] = 0.0);
 
   if (DEBUG) {
@@ -191,6 +194,75 @@ void load_client() {
 }
 
 //================================================
+// SERVER
+//================================================
+
+#define SERVER_PORT 2000
+
+// starts a UDP server to listen for incoming messages
+void *run_server() {
+  int socket_desc;
+  struct sockaddr_in server_addr;
+  struct sockaddr_in client_addr;
+  char server_message[2000];
+  char client_message[2000];
+  socklen_t client_struct_length = sizeof(client_addr);
+
+  // clear buffers
+  memset(server_message, '\0', sizeof(server_message));
+  memset(client_message, '\0', sizeof(client_message));
+
+  // load socket
+  socket_desc = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+
+  if (socket_desc < 0) {
+    printf("[SERVER] socket failed to create\n");
+    return NULL;
+  }
+  printf("\n\n[SERVER] socket created...\n");
+
+  // we are using internet
+  server_addr.sin_family = AF_INET;
+  // using port 2000, converted to correct endian
+  server_addr.sin_port = htons(SERVER_PORT);
+  // localhost
+  server_addr.sin_addr.s_addr = inet_addr("127.0.0.1");
+
+  // binding the port/address
+  if (bind(socket_desc, (struct sockaddr *)&server_addr, sizeof(server_addr)) <
+      0) {
+    printf("[SERVER] binding failed!\n");
+    close(socket_desc);
+    return NULL;
+  }
+  printf("[SERVER] binding succeeded...\n");
+
+  printf("[SERVER] server running on 127.0.0.1:%i...\n", SERVER_PORT);
+
+  while (1) {
+    // receive messages
+    if (recvfrom(socket_desc, client_message, sizeof(client_message), 0,
+                 (struct sockaddr *)&client_addr, &client_struct_length) < 0) {
+      printf("[SERVER] failed to receive!\n");
+      close(socket_desc);
+      return NULL;
+    }
+    printf("[SERVER] received message from ip: %s and port: %i\n",
+           inet_ntoa(client_addr.sin_addr), ntohs(client_addr.sin_port));
+
+    printf("[SERVER] client: %s\n", client_message);
+
+    if (strstr(client_message, "reload")) {
+      build();
+      load_client();
+    }
+  }
+
+  close(socket_desc);
+  return NULL;
+}
+
+//================================================
 // AUDIO
 //================================================
 void data_callback(ma_device *device, void *output, const void *input,
@@ -231,32 +303,35 @@ int main(int argc, char **argv) {
   load_client();
 
   if (ma_device_init(NULL, &deviceConfig, &device) != MA_SUCCESS) {
-    printf("[MA] failed to open playback device\n");
+    printf("[AUDIO] failed to open playback device\n");
     return -4;
   }
 
-  printf("[MA] device name: %s\n", device.playback.name);
+  printf("[AUDIO] device name: %s\n", device.playback.name);
 
   if (ma_device_start(&device) != MA_SUCCESS) {
-    printf("[MA] Failed to start playback device.\n");
+    printf("[AUDIO] Failed to start playback device.\n");
     ma_device_uninit(&device);
     return -5;
   }
 
   printf("\nplaying ... type 'quit' to quit\n");
 
+  pthread_t server_thread_id;
+  pthread_create(&server_thread_id, NULL, run_server, NULL);
+
   char line[100];
   while (1) {
-    printf(">> ");
+    printf("\n>> ");
     fgets(line, sizeof(line), stdin);
-    if (strstr(line, "reload") != NULL) {
+    if (strstr(line, "reload")) {
       build();
       // for (int i = 0; i < 100; i++)
       load_client();
-    } else if (strstr(line, "quit") != NULL) {
+    } else if (strstr(line, "quit")) {
       printf("quit!\n");
       break;
-    } else if (strstr(line, "build") != NULL) {
+    } else if (strstr(line, "build")) {
       build();
     }
   }

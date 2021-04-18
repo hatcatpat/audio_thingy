@@ -15,13 +15,4 @@
     *_nf = nf;                                                                 \
   }
 
-// our run callback, called each audio block
-#define RUN void run(S *s, int I, float *buf)
-
-// iterate over audio block
-#define LOOP for (int i = 0; i < I; i++)
-
-// our reload callback, called each time the client reload
-#define RELOAD void reload(S *s)
-
 #endif /* !UTIL */

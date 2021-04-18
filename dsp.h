@@ -108,12 +108,21 @@ static inline void _add_smp(S *s, float *v, int i, float *buf) {
 #define add_smp(v) _add_smp(s, v, i, buf)
 
 // pans sample to 2 channels
-// LEAK WARNING !!!
+// LEAK WARNING
 static float *pan(float v, float p) {
   float *o = (float *)malloc(sizeof(float) * 2);
   float l = (p + 1.0) / 2.0;
   o[0] = v * (1.0 - l);
   o[1] = v * l;
+  return o;
+}
+
+// spreads mono sample to 2 channels;
+// LEAK WARNING
+static float *spread(float v) {
+  float *o = (float *)malloc(sizeof(float) * 2);
+  o[0] = v;
+  o[1] = v;
   return o;
 }
 
@@ -137,11 +146,13 @@ static void _gain(S *s, float v, int I, float *buf) {
 }
 #define gain(v) _gain(s, v, I, buf)
 
+// applies gain to whole block, in db
 static inline void _gain_db(S *s, float db, int I, float *buf) {
   _gain(s, db2rms(db), I, buf);
 }
 #define gain_db(db) _gain_db(s, db, I, buf)
 
+// multiplies 2 channel array by single value
 static float *mul(float *in, float v) {
   in[0] *= v;
   in[1] *= v;
@@ -151,43 +162,37 @@ static float *mul(float *in, float v) {
 //================================================================================================
 // BUFFERS
 
-// get oscillator
-#define g_buf(buf_id) s->b[buf_id]
-#define p_buf(buf_id) &s->b[buf_id]
-
 // resets buffer with 0.0
-static void _init_buf(buf *b) {
+static void init_buf(buf *b) {
   b->w = 0;
   b->r = 0;
   for (int c = 0; c < 2; c++)
     for (int i = 0; i < BUFFER_MAX; i++)
       b->d[c][i] = 0.0;
 }
-#define init_buf(buf_id) _init_buf(p_buf(buf_id))
 
 // set buffer read position
-static inline void _buf_r(buf *b, float r) {
+static inline void buf_r(buf *b, float r) {
   b->r = fmin(r < 0 ? -r : r, BUFFER_MAX);
 }
-#define buf_r(buf_id, r) _buf_r(p_buf(buf_id), r)
 
 // write current sample into buffer
 static void _bufw(buf *b, int i, float *out) {
   for (int c = 0; c < 2; c++)
     b->d[c][b->w] = out[get_index(i, c, 2)];
 }
-#define bufw(buf_id) _bufw(p_buf(buf_id), i, buf)
+#define bufw(buf) _bufw(buf, i, buf)
 
 // writes current sample to buffer, with delay
 static void _delw(buf *b, float fb, int i, float *out) {
   for (int c = 0; c < 2; c++)
     b->d[c][b->w] = out[get_index(i, c, 2)] + b->d[c][b->w] * fb;
 }
-#define delw(buf_id, fb) _delw(p_buf(buf_id), fb, i, buf)
+#define delw(buf, fb) _delw(buf, fb, i, buf)
 
 // reads from the buffer and increases write position, treated as a delay line
-// LEAK WARNING !!!
-static float *_delr(buf *b) {
+// LEAK WARNING
+static float *delr(buf *b) {
   float *o = (float *)malloc(sizeof(float) * 2);
   int p = mod(b->w - b->r, BUFFER_MAX);
   o[0] = b->d[0][p];
@@ -195,29 +200,16 @@ static float *_delr(buf *b) {
   b->w = (b->w + 1) % BUFFER_MAX; // increase write position
   return o;
 }
-#define delr(buf_id) _delr(p_buf(buf_id))
 
 //================================================================================================
 // OSCILLATORS
-
-// get oscillator
-#define g_osc(osc_id) s->o[osc_id]
-#define p_osc(osc_id) &s->o[osc_id]
-// get oscillator theta
-#define th_osc(osc_id) s->o[osc_id].th
-// get oscillator freq
-#define f_osc(osc_id) s->o[osc_id].f
-
-// set oscillator freq
-static inline void _osc_f(osc *o, float f) { o->f = f; }
-#define osc_f(osc_id, f) _osc_f(p_osc(osc_id), f)
 
 // resets oscillator
 static inline void _init_osc(osc *o, float f) {
   o->th = 0.0;
   o->f = f;
 }
-#define init_osc(osc_id, f) _init_osc(p_osc(osc_id), f)
+#define init_osc(osc, f) _init_osc(osc, f)
 
 // increments oscillator
 static inline void update_osc(S *s, osc *o) {
@@ -225,10 +217,10 @@ static inline void update_osc(S *s, osc *o) {
   o->th = fmod(o->th, TAU);
 }
 
-// gets output from oscillator
-#define sin_osc(osc_id) fsin(th_osc(osc_id))
-#define saw_osc(osc_id) saw(th_osc(osc_id))
-#define pul_osc(osc_id) pul(th_osc(osc_id))
+// gets value from oscilator
+static inline float sin_osc(osc *o) { return fsin(o->th); }
+static inline float saw_osc(osc *o) { return saw(o->th); }
+static inline float pul_osc(osc *o) { return pul(o->th); }
 
 // update the state every sample
 // -  increments time
