@@ -12,6 +12,7 @@ Help()
   echo "-r	reloads client"
   echo "-q	quits server"
   echo "-s	set IP address"
+  echo "-f	set filename of sketch"
   echo
 }
 
@@ -19,7 +20,7 @@ SERVER="127.0.0.1"
 PORT=2000
 MESSAGE=""
 
-while getopts "hrqp:s:" option; do
+while getopts "hrqp:s:f:" option; do
   case $option in
     s) SERVER="$OPTARG"
       ;;
@@ -28,6 +29,8 @@ while getopts "hrqp:s:" option; do
     q) MESSAGE="quit"
       ;;
     p) PORT="$OPTARG"
+      ;;
+    f) MESSAGE="sketch $OPTARG"
       ;;
     h) Help
       exit;;
