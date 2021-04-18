@@ -99,13 +99,13 @@ static inline float rrand(float lo, float hi) {
 static inline int get_index(int i, int c, int C) { return i * C + c; }
 
 // adds sample to both channels of buffer, and frees input
-static inline void _add_smp(S *s, float *v, int i, float *buf) {
+static inline void _add_smp(S *s, float *v, int i, float *out) {
   for (int c = 0; c < s->nc; c++)
-    buf[get_index(i, c, s->nc)] += v[c];
+    out[get_index(i, c, s->nc)] += v[c];
 
   free(v);
 }
-#define add_smp(v) _add_smp(s, v, i, buf)
+#define add_smp(v) _add_smp(s, v, i, out)
 
 // pans sample to 2 channels
 // LEAK WARNING
@@ -139,18 +139,18 @@ static inline float db2rms(float db) {
 }
 
 // applies gain to whole block
-static void _gain(S *s, float v, int I, float *buf) {
+static void _gain(S *s, float v, int I, float *out) {
   for (int c = 0; c < s->nc; c++)
     for (int i = 0; i < I; i++)
-      buf[get_index(i, c, s->nc)] *= v;
+      out[get_index(i, c, s->nc)] *= v;
 }
-#define gain(v) _gain(s, v, I, buf)
+#define gain(v) _gain(s, v, I, out)
 
 // applies gain to whole block, in db
-static inline void _gain_db(S *s, float db, int I, float *buf) {
-  _gain(s, db2rms(db), I, buf);
+static inline void _gain_db(S *s, float db, int I, float *out) {
+  _gain(s, db2rms(db), I, out);
 }
-#define gain_db(db) _gain_db(s, db, I, buf)
+#define gain_db(db) _gain_db(s, db, I, out)
 
 // multiplies 2 channel array by single value
 static float *mul(float *in, float v) {
@@ -181,14 +181,14 @@ static void _bufw(buf *b, int i, float *out) {
   for (int c = 0; c < 2; c++)
     b->d[c][b->w] = out[get_index(i, c, 2)];
 }
-#define bufw(buf) _bufw(buf, i, buf)
+#define bufw(buf) _bufw(buf, i, out)
 
 // writes current sample to buffer, with delay
 static void _delw(buf *b, float fb, int i, float *out) {
   for (int c = 0; c < 2; c++)
     b->d[c][b->w] = out[get_index(i, c, 2)] + b->d[c][b->w] * fb;
 }
-#define delw(buf, fb) _delw(buf, fb, i, buf)
+#define delw(buf, fb) _delw(buf, fb, i, out)
 
 // reads from the buffer and increases write position, treated as a delay line
 // LEAK WARNING
@@ -216,11 +216,6 @@ static inline void update_osc(S *s, osc *o) {
   o->th += o->f * TAU / s->sr;
   o->th = fmod(o->th, TAU);
 }
-
-// gets value from oscilator
-static inline float sin_osc(osc *o) { return fsin(o->th); }
-static inline float saw_osc(osc *o) { return saw(o->th); }
-static inline float pul_osc(osc *o) { return pul(o->th); }
 
 // update the state every sample
 // -  increments time

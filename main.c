@@ -175,7 +175,7 @@ void load_client() {
           continue;
 
         client_run_lock = 1;
-
+        // TODO: use S and old S, rather than resizing S
         // set our n_ values to match the client
         set_sizes(&nb, &no, &nf);
         // allocate correct memory for our new S
@@ -237,8 +237,12 @@ void parse_user_input(char *input, int *running) {
     build();
     return;
   } else {
-    printf("[USER] incorrect command entered! try 'reload', 'build', or "
-           "'sketch FILENAME'\n");
+    printf("[USER] incorrect command entered!\n"
+           "try:\n"
+           "- reload: to reload the client\n"
+           "- quit: to exit audio_thingy\n"
+           "- build: to rebuild, without reloading\n"
+           "- sketch FILENAME.c: to set the current sketch to use\n");
     return;
   }
 
