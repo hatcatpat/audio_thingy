@@ -70,8 +70,14 @@ int build() {
 S s;
 
 static inline void init_S(S *s, int sr, int nc) {
+  s->b = NULL;
+  s->nb = 0;
+
   s->o = NULL;
   s->no = 0;
+
+  s->f = NULL;
+  s->nf = 0;
 
   s->sr = sr;
   s->nc = nc;
@@ -91,10 +97,27 @@ static inline uint np2(uint x) {
   return v == x ? 2 * v : v;
 }
 
+/*
 #define RESIZE_IMPL(NUM, NAME, TYPE, INIT)                                     \
   if (NUM) {                                                                   \
     if (!s->NAME || s->NUM != NUM) {                                           \
       s->NAME = (TYPE *)realloc(s->NAME, (size_t)np2(NUM * sizeof(TYPE)));     \
+      if (NUM > s->NUM) {                                                      \
+        for (int i = s->NUM; i < NUM; i++) {                                   \
+          INIT;                                                                \
+        }                                                                      \
+      }                                                                        \
+      s->NUM = NUM;                                                            \
+    }                                                                          \
+  } else {                                                                     \
+    free(s->NAME);                                                             \
+  }
+*/
+
+#define RESIZE_IMPL(NUM, NAME, TYPE, INIT)                                     \
+  if (NUM) {                                                                   \
+    if (!s->NAME || s->NUM != NUM) {                                           \
+      s->NAME = (TYPE *)realloc(s->NAME, NUM * sizeof(TYPE));                  \
       if (NUM > s->NUM) {                                                      \
         for (int i = s->NUM; i < NUM; i++) {                                   \
           INIT;                                                                \
@@ -142,6 +165,7 @@ typedef void CLIENT_SET_SIZES(int *nb, int *no, int *nf);
 // dynamic libraries
 void *client_lib;
 CLIENT_RUN *client_run;
+CLIENT_RELOAD *client_reload;
 int nb = 0;
 int no = 0;
 int nf = 0;
@@ -170,22 +194,19 @@ void load_client() {
       if (reload && set_sizes) {
         printf("[RELOAD] client reload/set_sizes loaded\n");
 
+        // set our n_ values to match the client
+        set_sizes(&nb, &no, &nf);
+
         // spin-lock to wait for audio to release client
         while (client_run_lock)
           continue;
 
-        client_run_lock = 1;
-        // TODO: use S and old S, rather than resizing S
-        // set our n_ values to match the client
-        set_sizes(&nb, &no, &nf);
         // allocate correct memory for our new S
         resize_S(&s, nb, no, nf);
-        // call client reload function
-        reload(&s);
 
+        // set run and reload function
+        client_reload = reload;
         client_run = run;
-
-        client_run_lock = 0;
 
         if (client_lib)
           dlclose(client_lib);
@@ -230,8 +251,12 @@ void parse_user_input(char *input, int *running) {
   } else if (strcmp(ptr, "sketch") == 0) {
     command = SKETCH;
   } else if (strcmp(ptr, "reload") == 0) {
-    build();
-    load_client();
+    // load_client();
+    for (int i = 0; i < 1000; i++) {
+      build();
+      load_client();
+      sleep(1);
+    }
     return;
   } else if (strcmp(ptr, "build") == 0) {
     build();
@@ -346,13 +371,16 @@ void data_callback(ma_device *device, void *output, const void *input,
                    ma_uint32 frame_count) {
   float *outbuf = (float *)output;
 
-  while (client_run_lock)
-    continue;
-
   client_run_lock = 1;
-  if (client_run) {
-    client_run(&s, frame_count, outbuf);
+
+  if (client_reload) {
+    client_reload(&s);
+    client_reload = NULL;
   }
+
+  if (client_run)
+    client_run(&s, frame_count, outbuf);
+
   client_run_lock = 0;
 }
 

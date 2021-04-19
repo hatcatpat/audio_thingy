@@ -26,7 +26,7 @@ typedef struct {
 
 // a 2-channel buffer, with a read and write counter
 typedef struct {
-  float d[2][BUFFER_MAX];
+  float d[BUFFER_MAX * 2];
   float r;
   int w;
 } buf;
@@ -168,7 +168,7 @@ static void init_buf(buf *b) {
   b->r = 0;
   for (int c = 0; c < 2; c++)
     for (int i = 0; i < BUFFER_MAX; i++)
-      b->d[c][i] = 0.0;
+      b->d[i * 2 + c] = 0.0;
 }
 
 // set buffer read position
@@ -179,14 +179,14 @@ static inline void buf_r(buf *b, float r) {
 // write current sample into buffer
 static void _bufw(buf *b, int i, float *out) {
   for (int c = 0; c < 2; c++)
-    b->d[c][b->w] = out[get_index(i, c, 2)];
+    b->d[b->w * 2 + c] = out[get_index(i, c, 2)];
 }
 #define bufw(buf) _bufw(buf, i, out)
 
 // writes current sample to buffer, with delay
 static void _delw(buf *b, float fb, int i, float *out) {
   for (int c = 0; c < 2; c++)
-    b->d[c][b->w] = out[get_index(i, c, 2)] + b->d[c][b->w] * fb;
+    b->d[b->w * 2 + c] = out[get_index(i, c, 2)] + b->d[b->w * 2 + c] * fb;
 }
 #define delw(buf, fb) _delw(buf, fb, i, out)
 
@@ -195,8 +195,8 @@ static void _delw(buf *b, float fb, int i, float *out) {
 static float *delr(buf *b) {
   float *o = (float *)malloc(sizeof(float) * 2);
   int p = mod(b->w - b->r, BUFFER_MAX);
-  o[0] = b->d[0][p];
-  o[1] = b->d[1][p];
+  o[0] = b->d[p * 2];
+  o[1] = b->d[p * 2 + 1];
   b->w = (b->w + 1) % BUFFER_MAX; // increase write position
   return o;
 }
